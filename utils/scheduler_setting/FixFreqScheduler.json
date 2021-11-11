@@ -1,0 +1,5 @@
+{
+    "scheduler_name": "FixFreqScheduler",
+    "scheduler_step": 150,
+    "scheduler_gamma": 0.1
+}

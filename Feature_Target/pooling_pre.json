@@ -1,0 +1,5 @@
+{
+    "feature": ["batchsize", "elements_matrix", "channels_in", "poolsize", 
+        "padding", "strides"],
+    "target": "preprocess_time"
+}

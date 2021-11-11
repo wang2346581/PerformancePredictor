@@ -1,0 +1,5 @@
+{
+    "feature": ["batchsize", "dim_input", "dim_output",
+        "use_bias", "activation_fct"],
+    "target": "preprocess_time"
+}

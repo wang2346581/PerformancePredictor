@@ -1,0 +1,6 @@
+{
+    "feature": ["batchsize", "elements_matrix", "elements_kernel",
+        "channels_in", "channels_out", "padding", "strides", 
+        "use_bias", "activation_fct"],
+    "target": "time_mean"
+}
