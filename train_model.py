@@ -34,7 +34,7 @@ def read_train_model_flags():
                     help='predition layer type for training or testing')
 
     parser.add_argument('--predition_sub_layertype', '-psl', default='', 
-                    type=str, choices=['pre', 'exe', 'post', ''],
+                    type=str, choices=['pre', 'exe', 'post', 'back', 'for', ''],
                     help='predition layer type for training or testing')
 
     parser.add_argument('--start_epoch', default=0, 
@@ -466,6 +466,7 @@ def train(flags, model, traindata, trainlabel, testdata, testlabel):
             _logger.info('[_Val_] Loss: {:.3f} | Mae: {:.3f} | Mape : {:.3f}% | RMSe: {:.3f} | R2: {:.3f}' \
                 .format(regm_test.loss.avg, regm_test.error.mae, regm_test.error.mape, regm_test.error.rmse, regm_test.error.r2))
             
+          
             if flags.best_mae >= regm_test.error.mae:
                 flags.best_mae = regm_test.error.mae
                 store_sess(saver_mae, sess, flags.mae_path, epoch+1, save_model = flags.save_model, save_str='mae')
@@ -478,7 +479,7 @@ def train(flags, model, traindata, trainlabel, testdata, testlabel):
             if flags.best_r2 <= regm_test.error.r2:
                 flags.best_r2 = regm_test.error.r2
                 store_sess(saver_r2, sess, flags.r2_path, epoch+1, save_model = flags.save_model, save_str='r2')
-    
+
     _logger.info('[Summary_Best] Mae: {:.3f} | Mape : {:.3f}% | RMSe: {:.3f} | R2: {:.3f}' \
         .format(flags.best_mae, flags.best_mape, flags.best_rmse, flags.best_r2))
 
@@ -501,9 +502,10 @@ def main():
     ### Evalidation 
     if flags.evaluate:
         pred_time, answer_time = validation(flags, model, test_feature, test_target)
+
         df_test['pred_time'] = pred_time
-        df_test['ans_time'] = answer_time
-        df_test.to_csv('./model.csv', index = None)
+        #df_test['ans_time'] = answer_time
+
         #pred_time, answer_time = validation(flags, model, train_feature, train_target)
         #df_train['pred_time'] = pred_time
 
@@ -512,7 +514,7 @@ def main():
         # df_train['ans_time'] = answer_time
         #print(df_test)
         #df_train.to_csv('./train.csv', index = None)
-        #df_test.to_csv('./test.csv', index = None)
+        df_test.to_csv('./QQQQQtest.csv', index = None)
         return 
     else:
         #print(test_feature, test_target)

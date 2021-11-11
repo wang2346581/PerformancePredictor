@@ -7,6 +7,7 @@ from .perfnetA2 import *
 from .perfnetA3 import *
 from .perfnetA5 import *
 from .perfnetADan import *
+from .resperfnet import *
 
 import os
 from pkgutil import iter_modules
@@ -43,6 +44,7 @@ def get_local_nn(inputs, training, network_name="perfnetA", pred = None):
         'perfnetA3': perfnetA3(inputs, training),
         'perfnetA5': perfnetA5(inputs, training),
         'perfnetADan': perfnetADan(inputs, training),
+        'resperfnet': resperfnet(inputs, training),
     }
     return nn_map[network_name]
 
@@ -50,3 +52,4 @@ def get_nn_list():
     return _global_import(module_name, [])
 
 __all__.append('get_local_nn')
+print(__all__)

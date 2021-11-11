@@ -20,7 +20,10 @@ def read_preprocess_data_flags():
     parser.add_argument('--path', '-path', type=str, default='', help='The main path of this program')
 
     # Timeline Parser File and Path Parameters
-    parser.add_argument('--is_train', '-is_train', type=int, default=0, help='collect optimizer data')
+    group1 = parser.add_mutually_exclusive_group()
+    group1.add_argument('--is_train', '-is_train', type=int, default=0, help='collect train optimizer data')
+    group1.add_argument('--is_trt', '-is_trt', type=int, default=0, help='collect trt optimizer data')
+
     parser.add_argument('--input_timeline_profile_dirname', '-itpd', type=str, default='timeline_profile', help='The input dirname of the timeline path')
     parser.add_argument('--input_timeline_profile_path', '-itpp', type=str, default='', help='The input path of the timeline path')
     parser.add_argument('--output_timeline_profile_filename', '-otpf', type=str, default='', help='The output filename of the timeline path')
@@ -38,6 +41,7 @@ def read_preprocess_data_flags():
     parser.add_argument('--retval', type=str, default='retval', help='search tag - retval')
     parser.add_argument('--first_calculate', type=str, default='sub', help='search tag - first_calculate')
     parser.add_argument('--last_calculate',  type=str, default='Neg', help='search tag - last_calculate')
+    parser.add_argument('--trt_transpose_in', type=str, default='NWith', help='search tag - compute_transpose_in')
 
     # Combine Parameters
     parser.add_argument('--combine_input_params_filename', '-cipf', type=str, default='', help='[Combination] The input csv file name')
@@ -151,11 +155,13 @@ def main():
                 str_retval = flags.retval, 
                 str_first_calculate= flags.first_calculate,
                 str_last_calculate = flags.last_calculate,
-                is_train = flags.is_train)
+                str_trt_transpose_in = flags.trt_transpose_in,
+                is_train = flags.is_train, 
+                is_trt = flags.is_trt)
             
             if recorders.fail_data == True: ### Pass the  Fail data 
                 print(recorders)
-                print("fail data index is {}".format(index))
+                print("fail data index is {}".format(filename))
                 continue
 
             for key, value in recorders.data.items():

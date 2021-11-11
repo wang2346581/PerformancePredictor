@@ -14,7 +14,6 @@ def get_support_accuracy_metrics():
 def get_support_devices():
     dict_ = {
         '1080ti': 'gpu',
-        'QQ': 'gpu'
     }
     return dict_
 
@@ -69,7 +68,7 @@ def get_end_to_end_model(model):
         end_to_end_model = Sequential()
         
         #end_to_end_model.add(Conv2D(32,(5,5),strides=(1,1),input_shape=(28,28,1),padding='valid',activation='relu',kernel_initializer='uniform'))
-        end_to_end_model.add(Conv2D(6,(5,5),strides=(1,1),input_shape=(28,28,1),padding='valid',activation='relu',kernel_initializer='uniform'))
+        end_to_end_model.add(Conv2D(6,(5,5),strides=(1,1),input_shape=(32,32,1),padding='valid',activation='relu',kernel_initializer='uniform'))
         end_to_end_model.add(MaxPooling2D(pool_size=(2,2)))
         #end_to_end_model.add(Conv2D(64,(5,5),strides=(1,1),padding='valid',activation='relu',kernel_initializer='uniform'))
 
@@ -120,6 +119,9 @@ def get_colnames(typename, is_train = 0):
 def get_hash_colnames():
     return ['hashkey']
 
+def get_support_activation():
+    return ['None', 'tf.nn.relu'] 
+
 def get_support_optimizer():
     return ['sgd', 'adagrad', 'rmsprop', 'adam']
 
@@ -141,7 +143,8 @@ def get_time_colnames():
 
 def get_profile_colnames(is_train = 0):
     if is_train:
-        return ['preprocess_time', 'execution_time', 'calculate_time', 'sess_time']
+        #return ['preprocess_time', 'execution_time', 'tranposeout_time', 'calculate_time', 'sess_time']
+        return ['preprocess_time', 'forward_time', 'backward_time', 'tranposeout_time', 'calculate_time', 'sess_time']
     return ['preprocess_time', 'execution_time', 'memcpy_time', 'retval_time', 'retval_half_time', 
         'memcpy_retval', 'memcpy_retval_half', 'sess_time']#, 'elements_matrix', 'elements_kernel']
 

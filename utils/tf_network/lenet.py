@@ -63,21 +63,17 @@ def lenet(images, num_classes=10, is_training=False,
   with tf.variable_scope(scope, 'LeNet', [images]):
     if not flags.memory_copy_in:  
       images = tf.Variable(tf.random_normal(flags.input), dtype=float)
-#    net = end_points['conv1'] = slim.conv2d(images, 32, [5, 5], scope='conv1')
+    #net = end_points['conv1'] = slim.conv2d(images, 32, [5, 5], scope='conv1')
     net = end_points['conv1'] = slim.conv2d(images, 6, [5, 5], scope='conv1')
-
     net = end_points['pool1'] = slim.max_pool2d(net, [2, 2], 2, scope='pool1')
-    
-#    net = end_points['conv2'] = slim.conv2d(net, 64, [5, 5], scope='conv2')
-    net = end_points['conv2'] = slim.conv2d(images, 16, [5, 5], scope='conv1')
-
-
+    net = end_points['conv2'] = slim.conv2d(net, 16, [5, 5], scope='conv2')
+    #net = end_points['conv2'] = slim.conv2d(net, 64, [5, 5], scope='conv2')
     net = end_points['pool2'] = slim.max_pool2d(net, [2, 2], 2, scope='pool2')
     net = slim.flatten(net)
     end_points['Flatten'] = net
 
-    net = end_points['fc3'] = slim.fully_connected(net, 120, scope='fc3')
-    net = end_points['fc4'] = slim.fully_connected(net, 84, activation_fn=tf.nn.relu, scope='fc4')
+    net = end_points['fc3'] = slim.fully_connected(net, 1024, scope='fc3')
+    net = end_points['fc4'] = slim.fully_connected(net, 100, activation_fn=tf.nn.relu, scope='fc4')
 
     if not num_classes:
       return net, end_points
@@ -89,8 +85,8 @@ def lenet(images, num_classes=10, is_training=False,
   end_points['Predictions'] = prediction_fn(logits, scope='Predictions')
 
   return logits, end_points
+#lenet.default_image_size = 28
 lenet.default_image_size = 32
-
 
 def lenet_arg_scope(weight_decay=0.0):
   """Defines the default lenet argument scope.

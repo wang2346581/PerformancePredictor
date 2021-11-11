@@ -13,6 +13,7 @@ from termcolor import colored
 from tensorflow.python.client import timeline
 
 from utils.utils import *
+from utils.layers import *
 from utils.model import Model
 from utils.network import get_nn_list
 from utils.meter import RegErrorMeter, ExpRegErrorMeter, DExpRegErrorMeter
@@ -27,7 +28,6 @@ def pred_data_preparation(flags, df_test, feature=list(), target=str()):
     print("==> Do data preparation ...")
     ### Get Data from csv
     df_train = pd.read_csv(flags.train_csv)
-   
     if target not in df_train.columns:
         return None, None, None, None
 
@@ -36,6 +36,8 @@ def pred_data_preparation(flags, df_test, feature=list(), target=str()):
         feature, target = get_feature_target(os.path.join(os.getcwd(), "Feature_Target", "ftf1.json"))
     ### Feature transformations
     ft_str = "[Features] Transformation: {} to Features: {}".format(flags.feature_transform, flags.ft_list)
+
+
     if flags.feature_transform == "":
         ft_str = "[Features] No transformation to the Features"
     elif flags.feature_transform == "log":
@@ -45,7 +47,11 @@ def pred_data_preparation(flags, df_test, feature=list(), target=str()):
     elif flags.feature_transform == "boxcox":
         for ft in flags.ft_list:
             df_train[ft], maxlog = stats.boxcox(df_train[ft])
-            df_test[ft]  =  stats.boxcox(df_test[ft], maxlog)
+            tmp = df_test[ft][0]
+            tmp2 = np.array([tmp, 2])
+            xx = stats.boxcox(tmp2, maxlog)
+            #df_test[ft]  =  stats.boxcox(df_test[ft], maxlog)
+            df_test[ft]  = xx[0]
     elif flags.feature_transform == "sqrt":
         for ft in flags.ft_list:
             df_train[ft] = np.sqrt(df_train[ft])
@@ -80,31 +86,12 @@ def pred_data_preparation(flags, df_test, feature=list(), target=str()):
         df_test[target]  = np.log(df_test[target])
     return train_scale, df_train[target], test_scale, df_test[target]#, df_train
 
-def create_conv2d(op, layer, layer_type, dict_layernum, is_train = 0):
-    layer_name = layer_type + str(dict_layernum[layer_type] + 1)
-    if is_train:
-        if layer['padding'].astype(int) == 1:
-            target_size = np.ceil(np.float(layer['matsize'].astype(int)/layer['strides'].astype(int)))
-        else:
-            target_size = np.ceil(np.float((layer['matsize'].astype(int)-(layer['kernelsize'].astype(int)-1)))/layer['strides'].astype(int))
-        target = tf.Variable(tf.ones([
-                    layer['batchsize'].astype(int),
-                    int(target_size),
-                    int(target_size),
-                    layer['channels_out'].astype(int)],
-                    dtype=float))
-        list_opts = get_support_optimizer()
-        opt_function_name = None
-        for opt in list_opts:
-            if layer[opt].astype(int) == 1:
-                opt_function_name = get_support_optimizer_function(opt)
-                break
-        opt = eval('tf.train.{}'.format(opt_function_name))
-
+def create_conv2d(op, layer, layer_type, dict_layernum):
+    layer_name = layer_type + str(dict_layernum[layer_type] + 1)  
     if op == None:
         op = tf.Variable(tf.random_normal([layer['batchsize'].astype(int), 
             layer['matsize'].astype(int), layer['matsize'].astype(int), layer['channels_in'].astype(int)]))
-   
+    
     op = tf.layers.conv2d(op, filters=layer['channels_out'].astype(int), 
         kernel_size=[layer['kernelsize'].astype(int), layer['kernelsize'].astype(int)], 
         strides=(layer['strides'].astype(int), layer['strides'].astype(int)), 
@@ -112,37 +99,12 @@ def create_conv2d(op, layer, layer_type, dict_layernum, is_train = 0):
         activation=eval(activation_list[layer['activation_fct'].astype(int)]), 
         use_bias=layer['use_bias'].astype(int),
         name=layer_name)
-    
-    dict_layernum[layer_type] += 1
-    
-    if is_train:
-        loss_ = tf.reduce_mean( tf.square( op - target ) )
-        train_op = opt.minimize(loss=loss_)
-        return train_op
 
+    dict_layernum[layer_type] += 1
     return op
 
-def create_pooling(op, layer, layer_type, dict_layernum, is_train = 0):
-    layer_name = layer_type + str(dict_layernum[layer_type] + 1)
-    if is_train:
-        if layer['padding'].astype(int) == 1:
-            target_size = np.ceil(np.float(layer['matsize'].astype(int)/layer['strides'].astype(int)))
-        else:
-            target_size = np.ceil(np.float((layer['matsize'].astype(int)-(layer['poolsize'].astype(int)-1)))/layer['strides'].astype(int))
-        target = tf.Variable(tf.ones([
-                    layer['batchsize'].astype(int),
-                    int(target_size),
-                    int(target_size),
-                    layer['channels_in'].astype(int)],
-                    dtype=float))
-        list_opts = get_support_optimizer()
-        opt_function_name = None
-        for opt in list_opts:
-            if layer[opt].astype(int) == 1:
-                opt_function_name = get_support_optimizer_function(opt)
-                break
-        opt = eval('tf.train.{}'.format(opt_function_name))
-
+def create_pooling(op, layer, layer_type, dict_layernum):
+    layer_name = layer_type + str(dict_layernum[layer_type] + 1)  
     if op == None:
         op = tf.Variable(tf.random_normal([layer['batchsize'].astype(int), 
             layer['matsize'].astype(int), layer['matsize'].astype(int), layer['channels_in'].astype(int)]))
@@ -153,28 +115,10 @@ def create_pooling(op, layer, layer_type, dict_layernum, is_train = 0):
         name = layer_name)
 
     dict_layernum[layer_type] += 1
-
-    if is_train:
-        loss_ = tf.reduce_mean( tf.square( op - target ) )
-        train_op = opt.minimize(loss=loss_)
-        return train_op
-
     return op
 
-def create_dense(op, layer, layer_type, dict_layernum, is_train = 0):
+def create_dense(op, layer, layer_type, dict_layernum):
     layer_name = layer_type + str(dict_layernum[layer_type] + 1)
-    if is_train:
-        target = tf.Variable(tf.ones([
-                    layer['batchsize'].astype(int),
-                    layer['dim_output'].astype(int)],
-                    dtype=float))
-        list_opts = get_support_optimizer()
-        opt_function_name = None
-        for opt in list_opts:
-            if layer[opt].astype(int) == 1:
-                opt_function_name = get_support_optimizer_function(opt)
-                break
-        opt = eval('tf.train.{}'.format(opt_function_name))
     if op == None:
         op = tf.Variable(tf.random_normal([layer['batchsize'].astype(int), layer['dim_input'].astype(int)]))
 
@@ -184,12 +128,6 @@ def create_dense(op, layer, layer_type, dict_layernum, is_train = 0):
         name = layer_name)
 
     dict_layernum[layer_type] += 1
-
-    if is_train:
-        loss_ = tf.reduce_mean( tf.square( op - target ) )
-        train_op = opt.minimize(loss=loss_)
-        return train_op
-
     return op
 
 def pred_validation(flags, model, ckpt_path_name, testdata, testlabel): 
@@ -236,10 +174,12 @@ def read_verify_model_flags():
     parser.add_argument('--iter_warmup', type=int, default=5, help='Number of iterations for warm-up')
     parser.add_argument('--iter_benchmark', type=int, default=10, help='Number of iterations for benchmark')
     
-    parser.add_argument('--is_train', '-is_train', type=int, default=0, help='collect optimizer data')
-    parser.add_argument('--opt_name', '-opt_name', default='sgd',
-                    type=str, choices=get_support_optimizer(), help='optimizer name for training or testing')
+    parser.add_argument('--run_on_child', '-roc', type=int, 
+        default=1, help='run on child process')
     
+    parser.add_argument('--memory_monitor', '-mm',  type=int, 
+        default=1, help='run on child process with memory monitor')
+
     #Data path Parameters
     parser.add_argument('--data_dirname', '-dd', default='data_full_model', 
         type=str, help='data dirname')
@@ -308,6 +248,9 @@ def read_verify_model_flags():
     parser.add_argument('--sleep_time', '-slt', type=float, default=0.005, help='The sleep time for each profile data')
 
     # Timeline Parser Search Parameters
+    parser.add_argument('--is_train', '-is_train', type=int, default=0, help='collect optimizer data')
+    parser.add_argument('--opt_name', '-opt_name', type=str, default='sgd', choices=get_support_optimizer(), help='the optimizer name')
+
     parser.add_argument('--replica_cpu', type=str, default='(replica:0)*(CPU:0)+ (Compute)+', help='search tag - replica_cpu')
     parser.add_argument('--all_compute', type=str, default='(GPU:0)*(all Compute)', help='search tag - all_compute')
     parser.add_argument('--memcpy', type=str, default='(memcpy)+ (Compute)+', help='search tag - memcpy')
@@ -318,7 +261,6 @@ def read_verify_model_flags():
     parser.add_argument('--retval', type=str, default='retval', help='search tag - retval')
     parser.add_argument('--first_calculate', type=str, default='sub', help='search tag - first_calculate')
     parser.add_argument('--last_calculate',  type=str, default='Neg', help='search tag - last_calculate')
-
 
     # Combile model parameters
     parser.add_argument('--combine_input_params_filename', '-cipf', type=str, default='', help='[Combination] The input csv file name')
@@ -379,7 +321,7 @@ def read_verify_model_flags():
 
 
     # Testing for memory copy
-    parser.add_argument('--memcopyin', '-mci', type=int, default=1, help='the flags for copying data to gpu (0: for generate data in tf GPU)') 
+    parser.add_argument('--memory_copy_in', '-mci', type=int, default=1, help='the flags for copying data to gpu (0: for generate data in tf GPU)') 
 
     # Use CPU to run tf model
     parser.add_argument('--cpu', '-cpu',  action='store_true', help='use cpu to run model')
@@ -484,7 +426,7 @@ def auto_create_dir(flags):
         create_dir_elemenet(os.path.dirname(flags.output_model_predict_path))
     return
 
-def get_op(layer, index, dict_layernum, memcpyin, inputs, is_train = 0):
+def get_op(layer, index, dict_layernum, memcpyin, inputs):
     input_ = None
     if re.search('conv2d', layer['operation'], re.M|re.I):
         if memcpyin:
@@ -492,7 +434,7 @@ def get_op(layer, index, dict_layernum, memcpyin, inputs, is_train = 0):
                 layer['matsize'].astype(int), layer['channels_in'].astype(int))).astype(float)
             inputs = tf.placeholder(tf.float32, shape=[layer['batchsize'].astype(int), layer['matsize'].astype(int), 
                 layer['matsize'].astype(int), layer['channels_in'].astype(int)], name="inputs")                    
-        op = create_conv2d(inputs, layer, 'conv2d', dict_layernum, is_train = is_train)
+        op = create_conv2d(inputs, layer, 'conv2d', dict_layernum)
         print("Type of layer{} is {}".format(index+1, 'conv2d'))    
 
     elif re.search('pooling', layer['operation'], re.M | re.I):
@@ -501,14 +443,14 @@ def get_op(layer, index, dict_layernum, memcpyin, inputs, is_train = 0):
                 layer['matsize'].astype(int), layer['channels_in'].astype(int))).astype(float)
             inputs = tf.placeholder(tf.float32, shape=[layer['batchsize'].astype(int), layer['matsize'].astype(int), 
                 layer['matsize'].astype(int), layer['channels_in'].astype(int)], name="inputs")
-        op = create_pooling(inputs, layer, 'pooling', dict_layernum, is_train = is_train)
+        op = create_pooling(inputs, layer, 'pooling', dict_layernum)
         print("Type of layer{} is {}".format(index+1, 'pooling'))    
 
     elif re.search('dense', layer['operation'], re.M | re.I):
         if memcpyin:
             input_ = np.random.normal(127, 60, (layer['batchsize'].astype(int), layer['dim_input'].astype(int))).astype(float)
             inputs = tf.placeholder(tf.float32, shape=[layer['batchsize'].astype(int), layer['dim_input'].astype(int)], name="inputs")                    
-        op = create_dense(inputs, layer, 'dense', dict_layernum, is_train = is_train)
+        op = create_dense(inputs, layer, 'dense', dict_layernum)
         print("Type of layer{} is {}".format(index+1, 'dense'))
     return op, inputs, input_
 
@@ -522,7 +464,7 @@ def main():
         print(warn_tag + 'Force to use cpu to compute')
     auto_create_dir(flags)
 
-    model_csv_columns = get_model_csv_total_columns(is_train=flags.is_train)
+    model_csv_columns = get_model_csv_total_columns(is_train = flags.is_train)
     end_to_end_model  = get_end_to_end_model(flags.model_name)
     #print(model_csv_columns)
     
@@ -572,19 +514,23 @@ def main():
                 elif re.search('Dense', str(layer.__class__), re.M|re.I):
                     cfg = layer.get_config()
                     input_shape_re = re.findall('[0-9]+', str(layer.input_shape))
-                    dict_layer['matsize']        = 1
+                    #dict_layer['matsize']        = 1
                     dict_layer['activation_fct'] = 1 if cfg["activation"] != None else 0
                     dict_layer['dim_input']      = int(input_shape_re[0])
                     dict_layer['dim_output']     = int(cfg["units"])
+                    dict_layer['dim_output']     = int(cfg["units"])
+                    dict_layer['use_bias']       = 1 if cfg["use_bias"]==True  else 0
                     founded = 1
+                
                 if flags.is_train:
-                    # reset the opt 
-                    dict_layer['sgd']     = 0
-                    dict_layer['adagrad'] = 0
+                    ## init
+                    dict_layer['sgd'] = 0
                     dict_layer['rmsprop'] = 0
-                    dict_layer['adam']    = 0
-                    # Correct the opt 
+                    dict_layer['adagrad'] = 0
+                    dict_layer['adam'] = 0
+                    ## SetUp
                     dict_layer[flags.opt_name] = 1
+
                 if founded:
                     # Basic params
                     dict_layer['name']      = layer.name
@@ -605,164 +551,87 @@ def main():
             df_layers.to_csv(flags.output_model_csv_path, index=False)
             print(success_tag, "Create file to %s!" % flags.output_model_csv_path)
 
-    if flags.exe_model or flags.profile_model or flags.combine_model or flags.predict_model:
+    if flags.exe_model or flags.profile_model or flags.combine_model:
         if not os.path.isfile(flags.input_model_csv_path):
-            print(flags.input_model_csv_path)
             print(warn_tag, "Please create model csv file or open the '-gmc' tag for the supported model at first!")
             return
-    if flags.exe_model:
+        
         dict_layernum = {'conv2d': 0, 'pooling': 0, 'dense': 0}
         df_ = pd.read_csv(flags.input_model_csv_path, usecols=model_csv_columns)
         tf.reset_default_graph()
+
+        ############## New Feature 
+        if flags.exe_model:
+            output_path = flags.output_model_exe_path
+        elif flags.profile_model:
+            output_path = flags.output_timeline_profile_path
+        
         for index in range(df_.shape[0]):
             tf.reset_default_graph()
             time_list = []
             layer = df_.loc[index, :]
             inputs = None 
-            op, inputs, input_ = get_op(layer, index, dict_layernum, flags.memcopyin, inputs, is_train = flags.is_train)
+            if re.search('conv2d', layer['operation'], re.M|re.I):
+                flags.predition_layertype = 'convolution'
+                layer = layer[get_cov_colnames(is_train = flags.is_train)].fillna(value=0).astype(int)
+            elif re.search('pooling', layer['operation'], re.M|re.I):
+                flags.predition_layertype = 'pooling'
+                layer = layer[get_pool_colnames(is_train = flags.is_train)].fillna(value=0).astype(int)
+            elif re.search('dense', layer['operation'], re.M|re.I):
+                flags.predition_layertype = 'dense'
+                layer = layer[get_dense_colnames(is_train = flags.is_train)].fillna(value=0).astype(int)
+            else:
+                print("This type of layer is not support!")
+                continue
+
+            ### foolproof add 
+            layer['hashkey'] = flags.predition_layertype + '_layer' + str(index + 1)
+            layer = get_layer(flags, layer, output_path)
+            if flags.run_on_child:
+                layer.run_on_child(0, flags.exe_model, 
+                    flags.profile_model, flags.memory_monitor)    
+            else:
+                layer.run(flags.exe_model, flags.profile_model)
         
-            sess = tf.Session()
-            if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
-                init = tf.initialize_all_variables()
-            else:
-                init = tf.global_variables_initializer()
-            sess.run(init)
+        if flags.profile_model:
+            files_input_timeline_profile_path = os.listdir(flags.output_timeline_profile_path)
+            # print(all_files)
+            index = 0
+            for filename in files_input_timeline_profile_path:
+                full_filename = os.path.join(flags.output_timeline_profile_path, filename)
+                recorders = Recorders(json_filename = full_filename, json_data = None, 
+                    str_replica_cpu = flags.replica_cpu,
+                    str_all_compute = flags.all_compute, str_memcpy = flags.memcpy,
+                    str_compute_transpose_in  = flags.compute_transpose_in, 
+                    str_compute_transpose_out = flags.compute_transpose_out,
+                    str_memcpyH2D = flags.memcpyH2D, str_memcpyD2H = flags.memcpyD2H, 
+                    str_retval = flags.retval, 
+                    str_first_calculate= flags.first_calculate,
+                    str_last_calculate = flags.last_calculate,
+                    is_train = flags.is_train)
             
-            if flags.memcopyin:
-                # Do WarmUp               
-                for _ in range(flags.iter_warmup):
-                    sess.run(op, feed_dict = {inputs: input_})
-                # Do Benchmark
-                for _ in range(flags.iter_benchmark):
-                    start_time = time.time()
-                    sess.run(op, feed_dict = {inputs: input_})
-                    time_list.append(((time.time()-start_time) * 1000)) # The unit of measurement is 'Millisecond'
-            else:
-                # Warm-up run
-                for _ in range(flags.iter_warmup):
-                    sess.run(op)
-                # Benchmark run
-                for _ in range(flags.iter_benchmark):
-                    start_time = time.time()
-                    sess.run(op)
-                    time_list.append(((time.time()-start_time) * 1000))
-                    
-            np_array_parameters = np.array(time_list)
-            df_.loc[index, 'batchsize'] = flags.batch_size
-            df_.loc[index, 'time_max']  = np.amax(np_array_parameters)
-            df_.loc[index, 'time_min']  = np.amin(np_array_parameters)
-            df_.loc[index, 'time_median']    = np.median(np_array_parameters)
-            df_.loc[index, 'time_mean']      = np.mean(np_array_parameters)
-            df_.loc[index, 'time_trim_mean'] = stats.trim_mean(np_array_parameters, 0.1)
-        df_.to_csv(flags.output_model_exe_path, index=False)
-
-    if flags.profile_model:
-        dict_layernum = {'conv2d': 0, 'pooling': 0, 'dense': 0}
-        df_ = pd.read_csv(flags.input_model_csv_path, usecols=model_csv_columns)
-        tf.reset_default_graph()
-        run_metadata = tf.RunMetadata()
-        for index in range(df_.shape[0]):
-            tf.reset_default_graph()
-            filename = os.path.join(flags.output_timeline_profile_path, 'layer_' + str(index+1) + '.json')
-            if os.path.isfile(filename):
-                print(warn_tag, "File: {} is Existed, Pleas delete all duplicate files manually!".format((filename)))
-                break
-
-            layer = df_.loc[index, :]
-            inputs = None 
-            op, inputs, input_ = get_op(layer, index, dict_layernum, flags.memcopyin, inputs, is_train = flags.is_train)
-
-            sess = tf.Session()
-            if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
-                init = tf.initialize_all_variables()
-            else:
-                init = tf.global_variables_initializer()
-            sess.run(init)
-            
-            if flags.memcopyin:
-                # Do WarmUp
-                for _ in range(flags.iter_warmup):
-                    sess.run(op, feed_dict = {inputs: input_})
-                # Do Benchmark            
-                start_time = time.time()
-                sess.run(op, options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                    run_metadata=run_metadata, feed_dict = {inputs: input_})
-                print(((time.time()-start_time) * 1000), "ms") # The unit of measurement is 'Millisecond'
-
-            else:
-                # Do WarmUp
-                for _ in range(flags.iter_warmup):
-                    sess.run(op)
-                # Do Benchmark            
-                sess.run(op, options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                    run_metadata=run_metadata)
-
-            tl = timeline.Timeline(run_metadata.step_stats)
-            ctf = tl.generate_chrome_trace_format()
-            with open(filename, 'w') as f:
-                f.write(ctf) 
-            time.sleep(flags.sleep_time)
-        
-        files_input_timeline_profile_path = os.listdir(flags.output_timeline_profile_path)
-        # print(all_files)
-        index = 0
-        for filename in files_input_timeline_profile_path:
-            full_filename = os.path.join(flags.output_timeline_profile_path, filename)
-            '''
-            recorders = Recorders(json_filename = full_filename, json_data = None, 
-                str_replica_cpu = flags.replica_cpu, str_replica_gpu = flags.replica_gpu, 
-                str_all_compute = flags.all_compute, str_memcpy = flags.memcpy,
-                str_replica_transpose_in  = flags.replica_transpose_in, 
-                str_replica_transpose_out = flags.replica_transpose_out, 
-                str_compute_transpose_in  = flags.compute_transpose_in, 
-                str_compute_transpose_out = flags.compute_transpose_out,
-                str_memcpyH2D = flags.memcpyH2D, str_memcpyD2H = flags.memcpyD2H, 
-                str_retval =flags.retval)
-            date_ele = {
-                'layers':             str(os.path.splitext(filename)[0]).split('_')[1],
-                'preprocess_time':    recorders.preprocess_time,
-                'execution_time':     recorders.execution_time,
-                'memcpy_time':        recorders.memcpyD2H_time, 
-                'retval_time':        recorders.retval_time,
-                'retval_half_time':   recorders.retval_half_time,
-                'memcpy_retval':      recorders.memcpyD2H_time + recorders.retval_time,
-                'memcpy_retval_half': recorders.memcpyD2H_time + recorders.retval_half_time,
-                'sess_time':          recorders.sess_time
-            }
-            for key, value in date_ele.items():
-                if key == 'layers':
+                if recorders.fail_data == True: ### Pass the  Fail data 
+                    print(recorders)
+                    print("fail data index is {}".format(index))
                     continue
-                date_ele[key] = value / 1000 # The unit of measurement is 'Millisecond' 
-            df_ele = pd.DataFrame(data = date_ele, index=[0])
-            '''
-            recorders = Recorders(json_filename = full_filename, json_data = None, 
-                str_replica_cpu = flags.replica_cpu,
-                str_all_compute = flags.all_compute, str_memcpy = flags.memcpy,
-                str_compute_transpose_in  = flags.compute_transpose_in, 
-                str_compute_transpose_out = flags.compute_transpose_out,
-                str_memcpyH2D = flags.memcpyH2D, str_memcpyD2H = flags.memcpyD2H, 
-                str_retval = flags.retval, 
-                str_first_calculate= flags.first_calculate,
-                str_last_calculate = flags.last_calculate,
-                is_train = flags.is_train)
-            
-            for key, value in recorders.data.items():
-                if key == 'hashkey':
-                    continue
-                recorders.data[key] = value / 1000 # The unit of measurement is 'Millisecond' 
-            df_ele = pd.DataFrame(data = recorders.data, index=[0])
-            
-            if index==0: 
-                df_ele.to_csv(flags.output_timeline_csv_path, index=False)
-                index = 1
-            else:
-                df_ele.to_csv(flags.output_timeline_csv_path, index=False, mode='a', header=False)
 
+                for key, value in recorders.data.items():
+                    if key == 'hashkey':
+                        continue
+                    recorders.data[key] = value / 1000 # The unit of measurement is 'Millisecond' 
+                df_ele = pd.DataFrame(data = recorders.data, index=[0])
+                if index==0: 
+                    df_ele.to_csv(flags.output_timeline_csv_path, index=False)
+                    index += 1
+                else:
+                    df_ele.to_csv(flags.output_timeline_csv_path, index=False, mode='a', header=False)
+            print(success_tag, 'Parse Timeline is Done!')
+    
     if flags.combine_model:
         if os.path.isfile(flags.combine_output_path):
             print(warn_tag, "File: {} is Existed, Pleas delete it manually!".format((flags.combine_output_path)))
         else:
-            col_dict  = get_colnames_from_dict()
+            col_dict = get_colnames_from_dict()
             df_struct = pd.read_csv(flags.combine_input_params_path)
             df_all = df_struct.copy()
             if os.path.isfile(flags.combine_input_exe_path):
@@ -779,6 +648,9 @@ def main():
             df_all.to_csv(flags.combine_output_path, index=False)
 
     if flags.predict_model:
+        if not os.path.isfile(flags.input_model_csv_path):
+            print(warn_tag, "Please create model csv file or open the '-gmc' tag for the supported model at first!")
+            return
         print("[Predict Model]")
         if os.path.isfile(flags.output_model_predict_path):
             print(warn_tag, "Alreadly have the data in %s, pass this step!" % flags.output_model_predict_path)
@@ -788,19 +660,44 @@ def main():
         feature_pooling, _ = get_feature_target(flags.feature_pooling_path) # get the feature and target 
         feature_dense, _   = get_feature_target(flags.feature_dense_path) # get the feature and target 
         df_  = pd.read_csv(flags.input_model_csv_path)
-        target_list = ['time_mean', 'preprocess_time', 'execution_time', 'memcpy_retval_half']
-        dict_target ={
-            'time_mean': '',
-            'preprocess_time' : 'pre',
-            'execution_time' : 'exe',
-            'memcpy_retval_half' : 'post'
-        }
-        dict_target_list ={
-            'time_mean': [],
-            'preprocess_time' : [],
-            'execution_time' : [],
-            'memcpy_retval_half' : []
-        }
+        if flags.is_train:
+            #target_list = ['time_mean', 'preprocess_time', 'execution_time', 'calculate_time']
+            target_list = ['time_mean', 'preprocess_time', 'forward_time', 'backward_time', 'calculate_time']
+            
+            dict_target_list ={
+                'time_mean': [],
+                'preprocess_time' : [],
+                #'execution_time' : [],
+                'forward_time' : [],
+                'backward_time' : [],
+                'calculate_time' : []
+            }
+        else:
+            target_list = ['time_mean', 'preprocess_time', 'execution_time', 'memcpy_retval_half']
+            dict_target_list ={
+                'time_mean': [],
+                'preprocess_time' : [],
+                'execution_time' : [],
+                'memcpy_retval_half' : []
+            }
+        if flags.is_train:
+            dict_target ={
+                'time_mean': '',
+                'preprocess_time' : 'pre',
+                #'execution_time' : 'exe',
+                'forward_time' : 'for',
+                'backward_time' : 'back',
+                'calculate_time' : 'post'
+            }
+        else:
+            dict_target ={
+                'time_mean': '',
+                'preprocess_time' : 'pre',
+                'execution_time' : 'exe',
+                'memcpy_retval_half' : 'post'
+            }
+
+        
         for index in range(df_.shape[0]):
             print(' ======== %d ========' % index)
             layer = df_.loc[index, :]
@@ -810,19 +707,22 @@ def main():
                     if index > 0 and target == 'preprocess_time':
                         dict_target_list[target].append(0)
                         continue
-                    if index != (df_.shape[0]-1) and target == 'memcpy_retval_half':
+                    if index != (df_.shape[0]-1) and (target == 'memcpy_retval_half' or target == 'calculate_time'):
                         dict_target_list[target].append(0)
                         continue
                     df_test = layer.fillna(0)
                     df_test = pd.DataFrame(df_test.values.reshape(-1, len(layer)), columns=df_.columns)     
                     df_test[feature_conv] = df_test[feature_conv].astype(int)
+                    #print("===============>",  dict_target[target], df_test)
+                    #exit()
+
                     flags.batch_size = 128
                     model = Model(flags, len(feature_conv))
 
                     flags.train_csv = os.path.join(os.getcwd(), flags.train_path, flags.convoulution_sub_path, flags.train_filename)
                     flags.ft_list   = ['elements_matrix', 'elements_kernel']
                     train_feature, train_target, test_feature, test_target = pred_data_preparation(flags, df_test, feature_conv, target)
-                    print("----------->", dict_target[target], test_feature)
+                    print("----------->", dict_target[target])
                     if not dict_target[target]:
                         if not train_feature:
                             continue
@@ -842,7 +742,7 @@ def main():
                     if index > 0 and target == 'preprocess_time':
                         dict_target_list[target].append(0)
                         continue
-                    if index != (df_.shape[0]-1) and target == 'memcpy_retval_half':
+                    if index != (df_.shape[0]-1) and (target == 'memcpy_retval_half' or target == 'calculate_time'):
                         dict_target_list[target].append(0)
                         continue
                     df_test = layer.fillna(0)
@@ -872,7 +772,7 @@ def main():
                     if index > 0 and target == 'preprocess_time':
                         dict_target_list[target].append(0)
                         continue
-                    if index != (df_.shape[0]-1) and target == 'memcpy_retval_half':
+                    if index != (df_.shape[0]-1) and (target == 'memcpy_retval_half' or target == "calculate_time"):
                         dict_target_list[target].append(0)
                         continue
                     df_test = layer.fillna(0)
@@ -883,7 +783,7 @@ def main():
                     model = Model(flags, len(feature_dense))
                     flags.train_csv = os.path.join(os.getcwd(), flags.train_path, flags.dense_sub_path, flags.train_filename)
                     flags.ft_list = ""
-                    if target == 'memcpy_retval_half':
+                    if target == 'memcpy_retval_half' or target == "calculate_time":
                         flags.magic_scaler = 10
                     train_feature, train_target, test_feature, test_target = pred_data_preparation(flags, df_test, feature_dense, target)
 
@@ -900,20 +800,42 @@ def main():
                     dict_target_list[target].append(pred_ele[0])
                     print(dict_target_list)
 
-             
-        if dict_target_list['preprocess_time']:
-            df_['pred_pre_time'] = dict_target_list['preprocess_time']
-        if dict_target_list['execution_time']:
-            df_['pred_exe_time'] = dict_target_list['execution_time']
-        if dict_target_list['memcpy_retval_half']:
-            df_['pred_post_time'] = dict_target_list['memcpy_retval_half']
-        if dict_target_list['time_mean']:
-            df_['pred_sess_time'] = dict_target_list['time_mean']
-        if dict_target_list['preprocess_time'] and  dict_target_list['execution_time'] and dict_target_list['memcpy_retval_half']:
-            sum_time = np.sum(df_['pred_exe_time']) + df_.iloc[0]['pred_pre_time'] + df_.iloc[-1]['pred_post_time']
-            df_['sum_time'] = sum_time
-        df_.to_csv(flags.output_model_predict_path, index=False)
-        
+        if flags.is_train:
+            if dict_target_list['preprocess_time']:
+                df_['pred_pre_time'] = dict_target_list['preprocess_time']
+            #if dict_target_list['execution_time']:
+                #df_['pred_exe_time'] = dict_target_list['execution_time']
+            
+            if dict_target_list['forward_time']:
+                df_['pred_for_time'] = dict_target_list['forward_time']
+            if dict_target_list['backward_time']:
+                df_['pred_back_time'] = dict_target_list['backward_time']
+
+            if dict_target_list['calculate_time']:
+                df_['pred_post_time'] = dict_target_list['calculate_time']
+            
+            #if dict_target_list['preprocess_time'] and dict_target_list['execution_time'] and dict_target_list['calculate_time']:
+            if dict_target_list['preprocess_time'] and dict_target_list['forward_time'] and dict_target_list['backward_time'] and dict_target_list['calculate_time']:
+                # sum_time = np.sum(df_['pred_exe_time']) + df_.iloc[0]['pred_pre_time'] + df_.iloc[-1]['pred_post_time']
+                sum_time = np.sum(df_['pred_for_time']) + np.sum(df_['pred_back_time'])  + df_.iloc[0]['pred_pre_time'] + df_.iloc[-1]['pred_post_time']
+                df_['sum_time'] = sum_time
+            df_.to_csv(flags.output_model_predict_path, index=False)
+        else:
+
+            if dict_target_list['preprocess_time']:
+                df_['pred_pre_time'] = dict_target_list['preprocess_time']
+            if dict_target_list['execution_time']:
+                df_['pred_exe_time'] = dict_target_list['execution_time']
+            if dict_target_list['memcpy_retval_half']:
+                df_['pred_post_time'] = dict_target_list['memcpy_retval_half']
+            
+            if dict_target_list['time_mean']:
+                df_['pred_sess_time'] = dict_target_list['time_mean']
+            if dict_target_list['preprocess_time'] and  dict_target_list['execution_time'] and dict_target_list['memcpy_retval_half']:
+                sum_time = np.sum(df_['pred_exe_time']) + df_.iloc[0]['pred_pre_time'] + df_.iloc[-1]['pred_post_time']
+                df_['sum_time'] = sum_time
+            df_.to_csv(flags.output_model_predict_path, index=False)
+        print('sum = ', sum_time)
         print(success_tag, "Create file to %s!" % flags.output_model_predict_path)
 
 if __name__ == '__main__':

@@ -27,7 +27,7 @@ class PerfNetB:
         name_scope = name + 'fc1'
         with tf.variable_scope(name_scope) as _:
             out = tf.layers.dense(
-                inputs = inputs,
+                inputs = fcLayer,
                 units = 32,
                 activation = tf.nn.relu,
                 kernel_regularizer = tf.contrib.layers.l2_regularizer(reg_constant),

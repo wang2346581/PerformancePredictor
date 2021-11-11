@@ -63,7 +63,11 @@ class Model:
             elif self.loss_name == "maple":
                 maes = tf.losses.absolute_difference( tf.log(1+ self.tf_targets), 
                     tf.log(1 + self.prediction))
-                self._loss = tf.reduce_mean(maes/tf.log(1+ self.tf_targets))
+                #self._loss = tf.reduce_mean(maes/tf.log(1+ self.tf_targets)) + 0.05 * tf.losses.get_regularization_loss()
+                self._loss = tf.reduce_mean(maes/tf.log(1+ self.tf_targets)) + 0.1 * tf.losses.get_regularization_loss()
+#                self._loss += 
+
+                  
             elif self.loss_name == "poisson":
                 self._loss = tf.keras.losses.poisson(self.tf_targets, tf.exp(self.prediction))
         return self._loss
